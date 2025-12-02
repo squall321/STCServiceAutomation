@@ -13,7 +13,8 @@
 #   4. <input>_modified.csv로 저장
 #
 
-set -e
+# Removed 'set -e' for better error handling in loops
+# Individual critical operations will be checked explicitly
 
 # 색상 정의
 RED='\033[0;31m'
@@ -86,8 +87,6 @@ create_user_on_server() {
 
         # 사용자 생성 스크립트
         local create_script="
-set -e
-
 # 사용자 생성
 sudo useradd -m -s /bin/bash '$new_user' 2>/dev/null || true
 
@@ -220,15 +219,21 @@ main() {
     while IFS=',' read -r ip role ssh_user ssh_password || [ -n "$ip" ]; do
         line_num=$((line_num + 1))
 
+        echo -e "${BLUE}[DEBUG]${NC} Read line $line_num: ip=$ip" >&2
+
         # 헤더 라인 건너뛰기
         if [ $line_num -eq 1 ]; then
             if [[ "$ip" == "ip" ]] || [[ "$ip" == "IP" ]]; then
+                echo -e "${BLUE}[DEBUG]${NC} Skipping header" >&2
                 continue
             fi
         fi
 
         # 빈 줄 건너뛰기
-        [ -z "$ip" ] && continue
+        if [ -z "$ip" ]; then
+            echo -e "${BLUE}[DEBUG]${NC} Skipping empty line" >&2
+            continue
+        fi
 
         # 공백 제거
         ip=$(echo "$ip" | tr -d '[:space:]')
@@ -237,6 +242,7 @@ main() {
         ssh_password=$(echo "$ssh_password" | tr -d '[:space:]')
 
         total_count=$((total_count + 1))
+        echo -e "${BLUE}[DEBUG]${NC} Processing server #$total_count: $ip" >&2
 
         # 사용자 생성
         if create_user_on_server "$ip" "$ssh_user" "$ssh_password" "$new_user" "$new_password"; then
