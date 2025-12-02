@@ -1,0 +1,6 @@
+ip,role,ssh_user,ssh_password
+192.168.122.1,controller,root,Soseks314!
+192.168.122.252,controller,root,Soseks314!
+192.168.122.90,compute,root,Soseks314!
+192.168.122.103,compute,root,Soseks314!
+192.168.122.223,viz,root,Soseks314!
