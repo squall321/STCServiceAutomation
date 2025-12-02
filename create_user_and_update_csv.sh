@@ -61,8 +61,8 @@ create_user_on_server() {
     local new_password="$5"
     local timeout=10
 
-    # SSH 옵션
-    local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=$timeout -o LogLevel=ERROR"
+    # SSH 옵션 (-n prevents SSH from reading stdin)
+    local ssh_opts="-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=$timeout -o LogLevel=ERROR"
 
     echo -e "  ${BLUE}[*]${NC} $ip - 사용자 생성 중..."
 
