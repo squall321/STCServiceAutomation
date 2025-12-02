@@ -54,8 +54,8 @@ get_server_info() {
     local password="$3"
     local timeout=10
 
-    # SSH 옵션
-    local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=$timeout -o LogLevel=ERROR"
+    # SSH 옵션 (-n prevents SSH from reading stdin)
+    local ssh_opts="-n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=$timeout -o LogLevel=ERROR"
 
     # hostname 조회
     local hostname
