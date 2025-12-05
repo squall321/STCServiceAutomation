@@ -219,7 +219,13 @@ verify_installation() {
     local all_ok=true
 
     for pkg in "${REQUIRED_PACKAGES[@]}"; do
-        if command -v "$pkg" &>/dev/null || dpkg -l | grep -q "^ii  $pkg "; then
+        # acl 패키지는 getfacl 명령으로 확인
+        local check_cmd="$pkg"
+        if [ "$pkg" = "acl" ]; then
+            check_cmd="getfacl"
+        fi
+
+        if command -v "$check_cmd" &>/dev/null || dpkg -l | grep -q "^ii  $pkg "; then
             print_success "$pkg 설치됨"
         else
             print_error "$pkg 설치 안 됨"
