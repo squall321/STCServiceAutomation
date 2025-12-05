@@ -35,8 +35,15 @@ show_current_location() {
             echo "현재 백업 경로: $current_path"
 
             # 디스크 정보
-            if [ -d "$current_path" ]; then
-                local disk_info=$(df -h "$current_path" | tail -1)
+            # 심볼릭 링크인 경우 실제 경로로 변환
+            local real_path="$current_path"
+            if [ -L "$current_path" ]; then
+                real_path=$(readlink -f "$current_path")
+                echo "심볼릭 링크: $current_path -> $real_path"
+            fi
+
+            if [ -d "$real_path" ]; then
+                local disk_info=$(df -h "$real_path" | tail -1)
                 echo ""
                 echo "디스크 정보:"
                 echo "$disk_info"
@@ -151,13 +158,20 @@ select_backup_location() {
     fi
 
     # 경로 생성 확인
-    if [ ! -d "$backup_path" ]; then
+    # 심볼릭 링크인 경우 실제 경로로 변환
+    local real_backup_path="$backup_path"
+    if [ -L "$backup_path" ]; then
+        real_backup_path=$(readlink -f "$backup_path")
+        print_info "심볼릭 링크 감지: $backup_path -> $real_backup_path"
+    fi
+
+    if [ ! -d "$real_backup_path" ]; then
         echo ""
         print_warning "백업 경로가 존재하지 않습니다: $backup_path"
         read -p "디렉토리를 생성하시겠습니까? (y/N): " create_dir
 
         if [[ "$create_dir" =~ ^[Yy]$ ]]; then
-            mkdir -p "$backup_path"/{snapshots,metadata}
+            mkdir -p "$real_backup_path"/{snapshots,metadata}
             print_success "백업 디렉토리 생성 완료"
         else
             print_error "백업 경로가 없습니다. 취소합니다."
@@ -166,12 +180,12 @@ select_backup_location() {
     fi
 
     # 쓰기 권한 확인
-    if [ ! -w "$backup_path" ]; then
+    if [ ! -w "$real_backup_path" ]; then
         print_warning "백업 경로에 쓰기 권한이 없습니다"
         read -p "소유권을 변경하시겠습니까? (y/N): " fix_perm
 
         if [[ "$fix_perm" =~ ^[Yy]$ ]]; then
-            sudo chown -R $USER:$USER "$backup_path"
+            sudo chown -R $USER:$USER "$real_backup_path"
             print_success "소유권 변경 완료"
         else
             print_warning "sudo로 백업 스크립트를 실행해야 할 수 있습니다"
