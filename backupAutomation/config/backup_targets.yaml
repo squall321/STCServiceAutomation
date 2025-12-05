@@ -1,0 +1,274 @@
+# 백업 대상 설정 파일
+# enabled: true/false로 백업 여부 선택
+# 각 항목의 크기와 위험도를 고려하여 선택하세요
+
+# ============================================
+# 필수 백업 (항상 백업됨, 변경 불가)
+# ============================================
+mandatory:
+  - path: /etc
+    description: 시스템 설정 (네트워크, 서비스, 방화벽 등 모든 설정)
+    estimated_size: 50-100MB
+    enabled: true
+    fixed: true
+
+  - path: /boot/grub
+    description: GRUB 부트로더 설정
+    estimated_size: 5-10MB
+    enabled: true
+    fixed: true
+
+  - path: /root
+    description: 루트 사용자 설정 (.bashrc, .ssh 등)
+    estimated_size: 5-20MB
+    enabled: true
+    fixed: true
+
+  - path: /var/spool/cron
+    description: 모든 사용자 crontab
+    estimated_size: 1-5MB
+    enabled: true
+    fixed: true
+
+
+# ============================================
+# 추가 시스템 설정 (권장)
+# ============================================
+system_config:
+  - path: /usr/local/etc
+    description: 로컬 설치 프로그램 설정 파일
+    estimated_size: 10-50MB
+    risk: low
+    enabled: false
+    note: /usr/local에 직접 설치한 프로그램의 설정
+
+  - path: /etc/systemd/system
+    description: 사용자 정의 systemd 서비스
+    estimated_size: 1-10MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함되지만 명시적으로 표시
+
+
+# ============================================
+# 네트워크 설정
+# ============================================
+network:
+  - path: /etc/network
+    description: 네트워크 인터페이스 설정 (Debian/Ubuntu)
+    estimated_size: 1MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+  - path: /etc/netplan
+    description: Netplan 네트워크 설정 (Ubuntu 18.04+)
+    estimated_size: 1MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+  - path: /etc/NetworkManager
+    description: NetworkManager 설정
+    estimated_size: 5MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+
+# ============================================
+# 스토리지 & RAID
+# ============================================
+storage:
+  - path: /etc/mdadm
+    description: RAID 설정 (소프트웨어 RAID)
+    estimated_size: 1MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+  - path: /etc/lvm
+    description: LVM (Logical Volume Manager) 설정
+    estimated_size: 1MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+
+# ============================================
+# 데이터베이스 설정 (데이터 제외)
+# ============================================
+database:
+  - path: /etc/mysql
+    description: MySQL/MariaDB 설정 파일만 (데이터 제외)
+    estimated_size: 5-10MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨. 데이터는 백업 안 됨
+
+  - path: /etc/postgresql
+    description: PostgreSQL 설정 파일만 (데이터 제외)
+    estimated_size: 5-10MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨. 데이터는 백업 안 됨
+
+
+# ============================================
+# 웹 서버 설정
+# ============================================
+webserver:
+  - path: /etc/nginx
+    description: Nginx 웹서버 설정
+    estimated_size: 5-20MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+  - path: /etc/apache2
+    description: Apache 웹서버 설정
+    estimated_size: 10-30MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+
+# ============================================
+# 애플리케이션 (용량 주의)
+# ============================================
+applications:
+  - path: /opt
+    description: 설치된 서드파티 애플리케이션
+    estimated_size: 100MB-10GB
+    risk: medium
+    enabled: false
+    note: 용량이 클 수 있음. Docker, 상용 소프트웨어 등
+
+  - path: /usr/local/bin
+    description: 로컬 설치 실행 파일
+    estimated_size: 10-500MB
+    risk: low
+    enabled: false
+
+  - path: /usr/local/lib
+    description: 로컬 설치 라이브러리
+    estimated_size: 10-500MB
+    risk: low
+    enabled: false
+
+  - path: /usr/local/share
+    description: 로컬 설치 공유 파일
+    estimated_size: 10-500MB
+    risk: low
+    enabled: false
+
+
+# ============================================
+# Docker (용량 주의)
+# ============================================
+docker:
+  - path: /etc/docker
+    description: Docker 설정
+    estimated_size: 5-10MB
+    risk: low
+    enabled: false
+    note: 이미 /etc에 포함됨
+
+  - path: /var/lib/docker/volumes
+    description: Docker 볼륨 (주의: 용량 큼)
+    estimated_size: 1GB-100GB
+    risk: high
+    enabled: false
+    note: 매우 클 수 있음. 개별 백업 권장
+
+
+# ============================================
+# 사용자 데이터 (용량 매우 큼, 주의!)
+# ============================================
+user_data:
+  - path: /home
+    description: 모든 사용자 홈 디렉토리
+    estimated_size: 1GB-1TB
+    risk: high
+    enabled: false
+    note: 용량 매우 큼. 선택적 백업 권장
+
+  - path: /root/.ssh
+    description: 루트 SSH 키
+    estimated_size: 1MB
+    risk: low
+    enabled: true
+    note: 이미 /root에 포함됨
+
+
+# ============================================
+# 웹 & 서비스 데이터 (용량 매우 큼, 주의!)
+# ============================================
+web_data:
+  - path: /var/www
+    description: 웹 서버 데이터 (HTML, PHP, 미디어 파일 등)
+    estimated_size: 100MB-100GB
+    risk: high
+    enabled: false
+    note: 용량 매우 큼. 개별 백업 권장
+
+  - path: /srv
+    description: 서비스 데이터 디렉토리
+    estimated_size: 100MB-100GB
+    risk: high
+    enabled: false
+    note: 용량 매우 큼. 개별 백업 권장
+
+
+# ============================================
+# 로그 (선택적)
+# ============================================
+logs:
+  - path: /var/log/syslog
+    description: 시스템 로그 (최근)
+    estimated_size: 10-100MB
+    risk: low
+    enabled: true
+
+  - path: /var/log/auth.log
+    description: 인증 로그
+    estimated_size: 10-50MB
+    risk: low
+    enabled: true
+
+  - path: /var/log/dpkg.log
+    description: 패키지 설치 로그
+    estimated_size: 5-20MB
+    risk: low
+    enabled: true
+
+  - path: /var/log/apt
+    description: APT 패키지 관리 로그
+    estimated_size: 5-20MB
+    risk: low
+    enabled: true
+
+
+# ============================================
+# 커스텀 경로 (사용자 정의)
+# ============================================
+custom:
+  # 예시:
+  # - path: /mnt/data/important
+  #   description: 중요한 데이터
+  #   estimated_size: 1GB
+  #   risk: medium
+  #   enabled: true
+  #   note: 프로젝트 파일
+
+
+# ============================================
+# 설명
+# ============================================
+# enabled: true/false - 백업 여부
+# fixed: true - 변경 불가 (필수 백업)
+# risk:
+#   - low: 용량 작음, 안전
+#   - medium: 용량 보통, 주의 필요
+#   - high: 용량 큼, 신중히 선택
+# estimated_size: 예상 크기 (참고용)

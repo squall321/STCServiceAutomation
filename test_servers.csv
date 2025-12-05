@@ -1,0 +1,4 @@
+ip,role,ssh_user,ssh_password
+127.0.0.1,controller,koopark,testpass123
+127.0.0.2,compute,koopark,testpass123
+127.0.0.3,viz,koopark,testpass123

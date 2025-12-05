@@ -1,25 +1,3 @@
-# 민감한 정보가 포함된 파일
-*.csv
-*_modified.csv
-*.yaml
-*.yml
-!*.example
-
-# 테스트 파일
-test_*
-real_test*
-
-# 백업 파일
-apt-backup-*
-*.tar.gz
-archives_output/
-
-# 임시 파일
-*.tmp
-*.log
-*.swp
-*~
-
 # OS 파일
 .DS_Store
 Thumbs.db

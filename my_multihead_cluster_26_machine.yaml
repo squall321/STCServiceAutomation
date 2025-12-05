@@ -1,0 +1,690 @@
+# Multi-Head HPC Cluster Configuration
+# Purpose: Full-Copy Quad-Redundancy with Dynamic Clustering
+# Version: 2.1
+#
+# 사용 방법:
+#   1. 이 파일을 편집하여 모든 설정을 구성합니다
+#   2. environment 섹션에서 비밀번호 설정
+#   3. 환경변수 설정 불필요! YAML만으로 완전 자동화
+#   4. sudo ./setup_cluster_full_multihead.sh 실행
+#
+# 보안 주의사항:
+#   - 민감 정보가 포함되므로 파일 권한 설정: chmod 600 my_multihead_cluster.yaml
+#   - Git 저장소에 커밋 시 주의 (.gitignore 권장)
+
+config_version: '2.1'
+stage: 0  # Phase 0부터 시작
+
+cluster_info:
+  cluster_name: smart-twin-cluster
+  domain: hpc.local
+  admin_email: koopark@samsung.com
+  timezone: Asia/Seoul
+  ssh_password: "Soseks314!"  # 모든 노드 공통 SSH 비밀번호
+
+# ============================================================================
+# Multi-Head Controllers (N중화 구성)
+# ============================================================================
+nodes:
+  # ✨ 핵심: controller를 리스트로 변경 (여러 개 지원)
+  controllers:
+    # Controller 1 (Primary)
+    - hostname: icn102-0407-h19
+      ip_address: 192.168.122.1
+      ssh_user: koopark
+      ssh_port: 22
+      ssh_key_path: ~/.ssh/id_rsa
+      os_type: ubuntu22
+      node_type: controller
+      priority: 100  # Keepalived VIP priority (높을수록 우선)
+
+      # 서비스 활성화 옵션 (각 controller마다 개별 설정 가능)
+      services:
+        glusterfs: true       # GlusterFS 클러스터 참여
+        mariadb: true         # MariaDB Galera 클러스터 참여
+        redis: true           # Redis Cluster 참여
+        slurm: true           # Slurm Multi-Master 참여
+        web: true             # 웹서비스 실행
+        keepalived: true      # Keepalived (VIP 관리) 실행
+
+      # VIP 소유 여부 (초기 시작 시)
+      vip_owner: true         # true: MASTER, false: BACKUP
+
+      hardware:
+        cpus: 16
+        memory_mb: 65536
+        disk_gb: 1000
+
+    # Controller 2
+    - hostname: viz-node001
+      ip_address: 192.168.122.252
+      ssh_user: koopark
+      ssh_port: 22
+      ssh_key_path: ~/.ssh/id_rsa
+      os_type: ubuntu22
+      node_type: controller
+      priority: 99  # VIP Priority (server1보다 낮음)
+
+      services:
+        glusterfs: true
+        mariadb: true
+        redis: true
+        slurm: true
+        web: true
+        keepalived: true
+
+      vip_owner: false  # BACKUP 모드로 시작
+
+      hardware:
+        cpus: 2
+        memory_mb: 4096
+        disk_gb: 1000
+
+  # Compute Nodes (기존과 동일)
+  compute_nodes:
+    - hostname: node001
+      ip_address: 192.168.122.90
+      ssh_user: koopark
+      ssh_port: 22
+      ssh_key_path: ~/.ssh/id_rsa
+      os_type: ubuntu22
+      node_type: compute
+      hardware:
+        cpus: 2
+        sockets: 1
+        cores_per_socket: 2
+        threads_per_core: 1
+        memory_mb: 4096
+        tmp_disk_mb: 512000
+
+    - hostname: node002
+      ip_address: 192.168.122.103
+      ssh_user: koopark
+      ssh_port: 22
+      ssh_key_path: ~/.ssh/id_rsa
+      os_type: ubuntu22
+      node_type: compute
+      hardware:
+        cpus: 2
+        sockets: 1
+        cores_per_socket: 2
+        threads_per_core: 1
+        memory_mb: 4096
+        tmp_disk_mb: 512000
+
+    - hostname: viz-node001
+      ip_address: 192.168.122.252
+      ssh_user: koopark
+      ssh_port: 22
+      ssh_key_path: ~/.ssh/id_rsa
+      os_type: ubuntu22
+      node_type: viz
+      hardware:
+        cpus: 2
+        sockets: 2
+        cores_per_socket: 1
+        threads_per_core: 1
+        memory_mb: 3584
+        tmp_disk_mb: 1024000
+        gpus: 1
+        gpu_type: amd
+        gres: gpu:amd:1
+  
+    - hostname: viz-node002
+      ip_address: 192.168.122.223
+      ssh_user: koopark
+      ssh_port: 22
+      ssh_key_path: ~/.ssh/id_rsa
+      os_type: ubuntu22
+      node_type: viz
+      hardware:
+        cpus: 2
+        sockets: 2
+        cores_per_socket: 1
+        threads_per_core: 1
+        memory_mb: 3584
+        tmp_disk_mb: 1024000
+        gpus: 1
+        gpu_type: amd
+        gres: gpu:amd:1
+
+# ============================================================================
+# Virtual IP (VIP) Configuration
+# ============================================================================
+network:
+  management_network: 192.168.1.0/24
+  compute_network: 192.168.122.0/24
+
+  # VIP 설정 (Keepalived)
+  vip:
+    address: 192.168.1.100       # Floating IP
+    netmask: 24
+    interface: ens18              # 네트워크 인터페이스 (서버마다 다를 수 있음)
+    vrrp_router_id: 51            # VRRP Router ID (클러스터 고유)
+    auth_password: hpc_cluster_vip_secret
+
+  # 방화벽 포트 (기존 + 추가)
+  firewall:
+    enabled: true
+    ports:
+      # Slurm
+      slurmd: 6818
+      slurmctld: 6817
+      slurmdbd: 6819
+
+      # Web Services
+      auth_backend: 4430
+      auth_frontend: 4431
+      dashboard_backend: 5010
+      websocket: 5011
+      cae_backend: 5000
+      cae_automation: 5001
+      dashboard_frontend: 5173
+      app_frontend: 5174
+
+      # Databases
+      mariadb: 3306
+      redis: 6379
+
+      # GlusterFS
+      glusterd: 24007
+      glusterd_mgmt: 24008
+      gluster_brick_start: 49152
+      gluster_brick_end: 49156
+
+      # Monitoring
+      prometheus: 9090
+      node_exporter: 9100
+      mariadb_exporter: 9104
+      redis_exporter: 9121
+
+      # Others
+      ssh: 22
+      http: 80
+      https: 443
+      vrrp: 112  # Keepalived VRRP protocol
+
+# ============================================================================
+# Shared Storage Configuration (GlusterFS)
+# ============================================================================
+shared_storage:
+  type: glusterfs  # glusterfs, nfs, ceph
+
+  glusterfs:
+    # Volume 설정
+    volume_name: shared_data
+    volume_type: replica       # replica, distributed, distributed-replica
+    replica_count: auto        # 'auto' = controller 수만큼 (4)
+
+    # Brick 경로 (각 controller의 로컬 디스크)
+    brick_path: /data/glusterfs/shared
+
+    # 마운트 포인트 (모든 controller에서 동일)
+    mount_point: /mnt/gluster
+
+    # Volume 옵션
+    options:
+      performance.cache-size: 256MB
+      network.ping-timeout: 10
+      cluster.self-heal-daemon: enable
+
+    # 디렉토리 구조 (자동 생성)
+    directories:
+      - frontend_builds     # 프론트엔드 빌드 파일
+      - slurm/state         # Slurm 상태 파일
+      - slurm/logs          # Slurm 로그
+      - slurm/spool         # Slurm 작업 큐
+      - uploads             # 사용자 업로드 파일
+      - config              # 공유 설정 파일
+
+  # 백업 저장소 (로컬 디스크, GlusterFS 아님!)
+  backup:
+    enabled: true
+    path: /data/system_backup  # 각 controller의 로컬 디스크
+
+    # 백업 스케줄
+    schedule:
+      full_backup: "0 2 * * *"       # 매일 새벽 2시
+      incremental: "0 * * * *"       # 매시간
+
+    # 보존 정책
+    retention:
+      daily: 7      # 최근 7일
+      weekly: 4     # 최근 4주
+      monthly: 12   # 최근 12개월
+
+    # 백업 항목
+    items:
+      - configs         # 설정 파일
+      - databases       # MariaDB, Redis
+      - slurm_state     # Slurm 상태
+      - glusterfs_meta  # GlusterFS 메타데이터
+
+# ============================================================================
+# Database Configuration (MariaDB Galera Cluster)
+# ============================================================================
+database:
+  enabled: true
+  type: mariadb-galera
+
+  mariadb:
+    version: "10.6"
+
+    # Galera Cluster 설정
+    galera:
+      cluster_name: hpc_portal_cluster
+      sst_method: rsync  # rsync, mariabackup, xtrabackup
+
+      # 클러스터 주소 (자동 생성: controllers에서 services.mariadb: true인 노드들)
+      # 예: gcomm://192.168.1.101,192.168.1.102,192.168.1.103,192.168.1.104
+      cluster_address: auto
+
+      # 동시 쓰기 스레드
+      slave_threads: 4
+
+    # 데이터베이스 생성 (Bootstrap 시)
+    databases:
+      - name: slurm_acct_db
+        user: slurm
+        password: "${DB_SLURM_PASSWORD}"  # 환경변수에서 읽기
+
+      - name: auth_portal
+        user: auth_user
+        password: "${DB_AUTH_PASSWORD}"
+
+    # 설정 옵션
+    config:
+      max_connections: 500
+      innodb_buffer_pool_size: 8G
+      innodb_log_file_size: 512M
+
+# ============================================================================
+# Redis Cluster Configuration
+# ============================================================================
+redis:
+  enabled: true
+  type: cluster  # cluster, sentinel
+
+  cluster:
+    port: 6379
+    password: "${REDIS_PASSWORD}"
+
+    # 클러스터 모드 설정
+    cluster_mode: true
+    replicas: 0  # 0 = 모든 노드가 Master
+
+    # 클러스터 노드 (자동 생성: controllers에서 services.redis: true인 노드들)
+    nodes: auto
+
+    # 타임아웃
+    cluster_node_timeout: 5000
+
+    # 데이터 지속성
+    appendonly: yes
+    appendfsync: everysec
+
+    # 메모리 정책
+    maxmemory: 4gb
+    maxmemory_policy: allkeys-lru
+
+# ============================================================================
+# Slurm Configuration
+# ============================================================================
+slurm_config:
+  version: 23.02.7
+  install_path: /usr/local/slurm
+  config_path: /usr/local/slurm/etc
+  log_path: /mnt/gluster/slurm/logs       # GlusterFS 공유
+  spool_path: /var/spool/slurm
+  state_save_location: /mnt/gluster/slurm/state  # GlusterFS 공유
+
+  # Multi-Master 설정
+  multi_master:
+    enabled: true
+    # SlurmctldHost 리스트 (자동 생성: controllers에서 services.slurm: true인 노드들)
+    controllers: auto
+
+  # Accounting (slurmdbd)
+  accounting:
+    storage_type: accounting_storage/slurmdbd
+    storage_host: 127.0.0.1  # 로컬 MariaDB Galera 노드
+    storage_port: 6819
+
+  scheduler:
+    type: sched/backfill
+    max_job_count: 10000
+    max_array_size: 1000
+
+  # Partition 설정 (기존과 동일)
+  partitions:
+    - name: normal
+      nodes: node[001-002]
+      default: true
+      max_time: 7-00:00:00
+      max_nodes: 2
+      state: UP
+
+    - name: viz
+      nodes: viz-node[001-002]
+      default: false
+      max_time: "60-00:00:00"
+      max_nodes: 2
+      state: UP
+      gres: gpu:amd:1
+      exclusive: false
+
+# ============================================================================
+# Web Services Configuration
+# ============================================================================
+web_services:
+  enabled: true
+
+  # 공유 설정 파일 경로 (GlusterFS)
+  shared_config_path: /mnt/gluster/config
+
+  # 프론트엔드 빌드 경로 (GlusterFS)
+  frontend_build_path: /mnt/gluster/frontend_builds
+
+  # 서비스 리스트
+  services:
+    - name: auth_portal
+      port: 4430
+      type: backend
+      health_check: /health
+
+    - name: auth_frontend
+      port: 4431
+      type: frontend
+      build_path: auth_frontend_4431
+
+    - name: dashboard_backend
+      port: 5010
+      type: backend
+      health_check: /health
+
+    - name: websocket
+      port: 5011
+      type: backend
+      websocket: true
+
+    - name: cae_backend
+      port: 5000
+      type: backend
+      health_check: /health
+
+    - name: cae_automation
+      port: 5001
+      type: backend
+      health_check: /health
+
+    - name: dashboard_frontend
+      port: 5173
+      type: frontend
+      build_path: dashboard_5173
+
+    - name: app_frontend
+      port: 5174
+      type: frontend
+      build_path: app_5174
+
+# ============================================================================
+# High Availability Configuration
+# ============================================================================
+high_availability:
+  # Keepalived 설정
+  keepalived:
+    enabled: true
+
+    # 헬스체크 스크립트
+    health_check:
+      script: /usr/local/bin/check_all_services.sh
+      interval: 2      # 2초마다 체크
+      weight: -20      # 실패 시 priority에서 -20
+      fall: 3          # 3번 연속 실패 시 FAULT
+      rise: 2          # 2번 연속 성공 시 OK
+
+    # 알림 스크립트
+    notifications:
+      master: /usr/local/bin/notify_master.sh
+      backup: /usr/local/bin/notify_backup.sh
+      fault: /usr/local/bin/notify_fault.sh
+
+  # 자동 복구
+  auto_recovery:
+    enabled: true
+
+    # Galera 자동 복구
+    galera:
+      enabled: true
+      script: /opt/hpc-dashboard/cluster/utils/galera_auto_recover.sh
+
+    # Redis Cluster 자동 복구
+    redis:
+      enabled: true
+      rebalance_on_join: true
+
+# ============================================================================
+# Monitoring & Alerting
+# ============================================================================
+monitoring:
+  # Prometheus
+  prometheus:
+    enabled: true
+    port: 9090
+    retention_days: 30
+
+    # Scrape targets (자동 생성)
+    scrape_interval: 15s
+
+  # Node Exporter
+  node_exporter:
+    enabled: true
+    port: 9100
+
+  # MariaDB Exporter
+  mariadb_exporter:
+    enabled: true
+    port: 9104
+
+  # Redis Exporter
+  redis_exporter:
+    enabled: true
+    port: 9121
+
+  # Grafana
+  grafana:
+    enabled: true
+    port: 3000
+    admin_password: "${GRAFANA_PASSWORD}"
+
+  # Alertmanager
+  alerting:
+    enabled: true
+
+    # 알림 채널
+    channels:
+      - type: slack
+        webhook_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#hpc-alerts"
+
+      - type: email
+        smtp_host: smtp.gmail.com
+        smtp_port: 587
+        from: alerts@hpc.local
+        to: admin@hpc.local
+
+    # 알림 규칙
+    rules:
+      - alert: NodeDown
+        duration: 30s
+        severity: critical
+
+      - alert: HighCPU
+        threshold: 90
+        duration: 5m
+        severity: warning
+
+      - alert: HighDisk
+        threshold: 80
+        duration: 1m
+        severity: warning
+
+      - alert: GaleraNodeDown
+        duration: 10s
+        severity: critical
+
+      - alert: VIPFailover
+        duration: 0s
+        severity: info
+
+# ============================================================================
+# User & Security Configuration
+# ============================================================================
+users:
+  admin_user: koopark
+  slurm_user: slurm
+  slurm_uid: 1001
+  slurm_gid: 1001
+  munge_user: munge
+  munge_uid: 1002
+  munge_gid: 1002
+
+  cluster_users:
+    - username: user01
+      uid: 2001
+      gid: 2001
+      groups: [users, hpc]
+
+    - username: user02
+      uid: 2002
+      gid: 2001
+      groups: [users, hpc]
+
+security:
+  munge:
+    key_rotation_days: 30
+
+  selinux:
+    enabled: true
+    mode: permissive
+
+  # JWT 설정 (웹 인증)
+  jwt:
+    secret_key: "${JWT_SECRET_KEY}"
+    algorithm: HS256
+    expiration_hours: 8
+
+# ============================================================================
+# Container & GPU Support (기존과 동일)
+# ============================================================================
+container_support:
+  apptainer:
+    enabled: true
+    version: 1.2.5
+    install_path: /usr/local
+    image_path: /share/apptainer/images
+    cache_path: /tmp/apptainer
+    bind_paths: [/home, /share, /scratch, /tmp]
+    deployment_strategy: local_copy
+    master_images_path: /scratch/apptainers
+    node_local_path: /scratch/apptainers
+
+gpu_computing:
+  nvidia:
+    enabled: true
+    nodes: []
+
+  amd:
+    enabled: true
+    nodes: [viz-node001]
+
+# ============================================================================
+# Dynamic Clustering Options
+# ============================================================================
+clustering:
+  # 자동 탐지 설정
+  auto_discovery:
+    enabled: true
+    timeout: 5  # SSH 접속 타임아웃 (초)
+    health_check_interval: 30  # 헬스체크 간격 (초)
+
+  # 자동 조인 설정
+  auto_join:
+    enabled: true
+    # 활성 노드 0개: Bootstrap
+    # 활성 노드 1개+: Join
+
+  # 노드 추가/제거
+  node_management:
+    allow_dynamic_add: true     # 동적 노드 추가 허용
+    allow_dynamic_remove: true  # 동적 노드 제거 허용
+    min_controllers: 1          # 최소 controller 수
+    max_controllers: 10         # 최대 controller 수
+
+  # 클러스터 상태 출력
+  status_format: table  # table, json, yaml
+
+# ============================================================================
+# Environment Variables (Template)
+# ============================================================================
+environment:
+  # 데이터베이스
+  DB_SLURM_PASSWORD: "slurm_secure_password"
+  DB_AUTH_PASSWORD: "auth_secure_password"
+
+  # Redis
+  REDIS_PASSWORD: "redis_cluster_secret"
+
+  # JWT
+  JWT_SECRET_KEY: "jwt_super_secret_key_change_me"
+
+  # Grafana
+  GRAFANA_PASSWORD: "grafana_admin_password"
+
+  # Slack (선택)
+  SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+# ============================================================================
+# Installation & Deployment
+# ============================================================================
+installation:
+  install_method: package  # package, source
+  offline_mode: false
+  package_cache_path: /var/cache/cluster_packages
+
+  # 자동 확인 옵션
+  auto_confirm: false  # true면 모든 사용자 프롬프트 자동 Yes
+
+  # 선택적 설치 (기본 시스템 설정)
+  skip_munge: false            # Munge 설치 건너뛰기
+  skip_slurm_base: false       # Slurm 기본 설치 건너뛰기
+  install_mpi: false           # MPI 라이브러리 설치
+  install_apptainer: false     # Apptainer 컨테이너 설치
+
+  # 타임아웃 설정 (초)
+  timeouts:
+    cluster_join_wait: 300     # 클러스터 조인 대기 (5분)
+    service_start_wait: 30     # 서비스 시작 대기
+    ssh_timeout: 10            # SSH 연결 타임아웃
+    health_check_interval: 10  # 헬스체크 간격
+
+  # Phase별 실행 옵션
+  phases:
+    phase0_storage: true      # GlusterFS 설정
+    phase1_database: true     # MariaDB Galera 설정
+    phase2_redis: true        # Redis Cluster 설정
+    phase3_slurm: true        # Slurm Multi-Master 설정
+    phase4_keepalived: true   # Keepalived VIP 설정
+    phase5_web: true          # 웹 서비스 배포
+    phase6_monitoring: true   # 모니터링 설정
+
+# ============================================================================
+# Time Synchronization
+# ============================================================================
+time_synchronization:
+  enabled: true
+  ntp_servers:
+    - time.google.com
+    - time.cloudflare.com
+    - pool.ntp.org
+  timezone: Asia/Seoul

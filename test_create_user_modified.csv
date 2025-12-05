@@ -1,0 +1,4 @@
+ip,role,ssh_user,ssh_password
+192.168.122.1,controller,newuser,NewPass123!
+192.168.122.252,controller,newuser,NewPass123!
+192.168.122.90,compute,newuser,NewPass123!
