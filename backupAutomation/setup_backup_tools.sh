@@ -189,18 +189,47 @@ install_packages() {
     print_info "패키지 설치 중..."
     cd "$PACKAGES_DIR"
 
-    # dpkg로 설치 시도
-    echo ""
-    if dpkg -i *.deb 2>/dev/null; then
-        print_success "모든 패키지 설치 완료"
-    else
-        print_warning "일부 의존성 문제 발생. 해결 시도 중..."
-        # 의존성 문제 해결
-        apt-get install -f -y 2>/dev/null || {
-            print_error "의존성 해결 실패"
-            print_info "수동으로 해결이 필요할 수 있습니다: sudo apt-get install -f"
-        }
+    # 먼저 필수 패키지만 설치 시도 (이미 설치된 것은 건너뜀)
+    echo "" >&2
+    local installed=0
+    local skipped=0
+    local failed=0
+
+    for pkg in "${REQUIRED_PACKAGES[@]}"; do
+        # 이미 설치되어 있는지 확인
+        if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+            echo "건너뜀: $pkg (이미 설치됨)" >&2
+            ((skipped++))
+            continue
+        fi
+
+        # 해당 패키지 .deb 파일 찾기
+        local deb_file=$(ls ${pkg}_*.deb 2>/dev/null | head -1)
+        if [ -z "$deb_file" ]; then
+            # 패키지 이름에 버전이나 언더스코어가 없을 수 있음
+            deb_file=$(ls ${pkg}*.deb 2>/dev/null | head -1)
+        fi
+
+        if [ -n "$deb_file" ]; then
+            echo "설치 중: $pkg ($deb_file)" >&2
+            if dpkg -i "$deb_file" >/dev/null 2>&1; then
+                ((installed++))
+            else
+                echo "  ⚠ 의존성 대기: $pkg" >&2
+                ((failed++))
+            fi
+        fi
+    done
+
+    # 의존성이 있는 패키지들을 위해 전체 설치 재시도
+    if [ $failed -gt 0 ]; then
+        print_warning "의존성 문제 해결 중..." >&2
+        dpkg -i *.deb 2>&1 | grep -v "already installed" | grep -v "이미 설치" || true
+        apt-get install -f -y >/dev/null 2>&1 || true
     fi
+
+    echo "" >&2
+    print_success "패키지 설치 완료 (설치: $installed, 건너뜀: $skipped)"
 
     cd "$SCRIPT_DIR"
 
