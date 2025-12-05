@@ -7,7 +7,8 @@ set -eo pipefail
 
 # 출력 버퍼링 비활성화
 export PYTHONUNBUFFERED=1
-stdbuf -o0 -e0 cat > /dev/null 2>&1 || true
+# stdbuf 테스트 (입력 블로킹 방지)
+echo -n "" | stdbuf -o0 -e0 cat > /dev/null 2>&1 || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGES_DIR="$SCRIPT_DIR/packages"
@@ -250,7 +251,13 @@ check_tools() {
     local missing_tools=()
 
     for pkg in "${REQUIRED_PACKAGES[@]}"; do
-        if command -v "$pkg" &>/dev/null; then
+        # acl 패키지는 getfacl 명령으로 확인
+        local check_cmd="$pkg"
+        if [ "$pkg" = "acl" ]; then
+            check_cmd="getfacl"
+        fi
+
+        if command -v "$check_cmd" &>/dev/null; then
             local version=$(dpkg -l "$pkg" 2>/dev/null | grep "^ii" | awk '{print $3}')
             print_success "$pkg (버전: ${version:-unknown})"
         else
