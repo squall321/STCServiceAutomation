@@ -151,12 +151,12 @@ check_installed_packages() {
 scan_backup_packages() {
     print_header "백업 패키지 분석 중"
 
-    local deb_files=("$BACKUP_DIR/packages"/*.deb)
+    local deb_files=("$PACKAGES_PATH"/*.deb)
     local total=${#deb_files[@]}
     local count=0
 
     if [ ! -f "${deb_files[0]}" ]; then
-        print_error "백업 디렉토리에 .deb 파일을 찾을 수 없습니다."
+        print_error "백업 디렉토리에 .deb 파일을 찾을 수 없습니다: $PACKAGES_PATH"
         exit 1
     fi
 
@@ -529,7 +529,8 @@ echo "=== 다음 단계 ==="
 echo "1. $BACKUP_FILE 파일을 USB 등으로 오프라인 PC에 복사"
 echo "2. 오프라인 PC에서 압축 해제:"
 echo "   tar -xzf $BACKUP_FILE"
-echo "3. 해제된 .deb 파일들을 기존 백업 디렉토리의 packages/ 폴더에 복사"
+echo "3. 해제된 .deb 파일들을 패키지 디렉토리에 복사"
+echo "   (restore_packages.sh 실행 시 표시되는 패키지 경로에 복사)"
 echo "4. restore_packages.sh 재실행"
 echo ""
 echo "정리하려면: rm -rf $DOWNLOAD_DIR"
@@ -667,33 +668,87 @@ main() {
         print_info "sudo 사용이 필요할 수 있습니다."
     fi
 
-    # 백업 파일 찾기
-    print_header "백업 파일 검색"
-    BACKUP_FILE=$(ls apt-backup-*.tar.gz 2>/dev/null | head -n 1)
+    # 명령줄 인자 처리
+    local user_input="${1:-}"
 
-    if [ -z "$BACKUP_FILE" ]; then
-        print_error "백업 파일(apt-backup-*.tar.gz)을 찾을 수 없습니다."
-        echo "현재 디렉토리에 백업 파일이 있는지 확인하세요."
+    if [ -n "$user_input" ]; then
+        # 인자가 제공된 경우
+        if [ -f "$user_input" ] && [[ "$user_input" == *.tar.gz ]]; then
+            # tar.gz 파일 경로가 제공됨
+            print_header "백업 파일 사용"
+            BACKUP_FILE="$user_input"
+            print_success "백업 파일: $BACKUP_FILE"
+
+            # 압축 해제
+            print_header "백업 파일 압축 해제"
+            BACKUP_DIR=$(basename "$BACKUP_FILE" .tar.gz)
+            if [ ! -d "$BACKUP_DIR" ]; then
+                tar -xzf "$BACKUP_FILE"
+            fi
+            print_success "압축 해제 완료: $BACKUP_DIR"
+
+        elif [ -d "$user_input" ]; then
+            # 디렉토리 경로가 제공됨
+            print_header "패키지 디렉토리 사용"
+            BACKUP_DIR="$user_input"
+            print_success "패키지 디렉토리: $BACKUP_DIR"
+
+        else
+            print_error "유효하지 않은 경로: $user_input"
+            echo ""
+            echo "사용법:"
+            echo "  $0                              # 현재 디렉토리에서 apt-backup-*.tar.gz 자동 검색"
+            echo "  $0 /path/to/backup.tar.gz       # 특정 백업 파일 사용"
+            echo "  $0 /path/to/packages/           # 특정 패키지 디렉토리 사용"
+            exit 1
+        fi
+    else
+        # 인자가 없으면 자동 검색
+        print_header "백업 파일 검색"
+        BACKUP_FILE=$(ls apt-backup-*.tar.gz 2>/dev/null | head -n 1)
+
+        if [ -z "$BACKUP_FILE" ]; then
+            print_error "백업 파일(apt-backup-*.tar.gz)을 찾을 수 없습니다."
+            echo "현재 디렉토리에 백업 파일이 있는지 확인하세요."
+            echo ""
+            echo "사용법:"
+            echo "  $0                              # 현재 디렉토리에서 apt-backup-*.tar.gz 자동 검색"
+            echo "  $0 /path/to/backup.tar.gz       # 특정 백업 파일 사용"
+            echo "  $0 /path/to/packages/           # 특정 패키지 디렉토리 사용"
+            exit 1
+        fi
+
+        print_success "백업 파일 발견: $BACKUP_FILE"
+
+        # 압축 해제
+        print_header "백업 파일 압축 해제"
+        if [ ! -d "$(basename "$BACKUP_FILE" .tar.gz)" ]; then
+            tar -xzf "$BACKUP_FILE"
+        fi
+        BACKUP_DIR=$(basename "$BACKUP_FILE" .tar.gz)
+        print_success "압축 해제 완료: $BACKUP_DIR"
+    fi
+
+    # 패키지 디렉토리 확인 및 설정
+    if [ -d "$BACKUP_DIR/packages" ]; then
+        # packages 서브디렉토리가 있는 경우 (표준 백업 구조)
+        PACKAGES_PATH="$BACKUP_DIR/packages"
+    elif [ -f "$BACKUP_DIR"/*.deb ] 2>/dev/null; then
+        # 직접 .deb 파일이 있는 경우
+        PACKAGES_PATH="$BACKUP_DIR"
+    else
+        print_error "패키지 파일을 찾을 수 없습니다."
+        echo "확인할 경로: $BACKUP_DIR/packages/ 또는 $BACKUP_DIR/"
         exit 1
     fi
-
-    print_success "백업 파일 발견: $BACKUP_FILE"
-
-    # 압축 해제
-    print_header "백업 파일 압축 해제"
-    if [ ! -d "$(basename "$BACKUP_FILE" .tar.gz)" ]; then
-        tar -xzf "$BACKUP_FILE"
-    fi
-    BACKUP_DIR=$(basename "$BACKUP_FILE" .tar.gz)
-    print_success "압축 해제 완료: $BACKUP_DIR"
 
     # 패키지 개수 확인
-    PACKAGE_COUNT=$(ls "$BACKUP_DIR/packages"/*.deb 2>/dev/null | wc -l)
+    PACKAGE_COUNT=$(ls "$PACKAGES_PATH"/*.deb 2>/dev/null | wc -l)
     if [ "$PACKAGE_COUNT" -eq 0 ]; then
-        print_error "백업 디렉토리에 패키지가 없습니다."
+        print_error "패키지 디렉토리에 .deb 파일이 없습니다: $PACKAGES_PATH"
         exit 1
     fi
-    print_info "발견된 패키지: $PACKAGE_COUNT 개"
+    print_info "발견된 패키지: $PACKAGE_COUNT 개 ($PACKAGES_PATH)"
 
     # 단계 1: 시스템 패키지 분석
     check_installed_packages
@@ -719,7 +774,7 @@ main() {
         echo "다음 단계를 진행하세요:"
         echo "1. 온라인 PC에서 download_missing_packages.sh 실행"
         echo "2. 생성된 백업 파일을 이 PC로 복사"
-        echo "3. 압축 해제 후 .deb 파일들을 $BACKUP_DIR/packages/ 에 추가"
+        echo "3. 압축 해제 후 .deb 파일들을 $PACKAGES_PATH 에 추가"
         echo "4. 이 스크립트 재실행"
         echo ""
 
