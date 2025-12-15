@@ -247,7 +247,22 @@ analyze_single_package_deps() {
         fi
 
         # 가상 패키지나 특수 의존성 스킵
+        # 1. 정확한 이름 매칭
         if [[ "$dep_pkg" =~ ^(debconf|perl|python3|awk|base-files|base-passwd)$ ]]; then
+            continue
+        fi
+
+        # 2. ABI/API 가상 패키지 패턴
+        if [[ "$dep_pkg" =~ -abi-[0-9] ]] || \
+           [[ "$dep_pkg" =~ api-[0-9] ]] || \
+           [[ "$dep_pkg" =~ ^perl-dbd ]] || \
+           [[ "$dep_pkg" =~ ^perlapi- ]] || \
+           [[ "$dep_pkg" =~ ^xorg-video-abi ]] || \
+           [[ "$dep_pkg" =~ ^xorg-input-abi ]] || \
+           [[ "$dep_pkg" =~ ^python[0-9.]+-.*-abi- ]] || \
+           [[ "$dep_pkg" =~ -abi-[0-9]+$ ]] || \
+           [[ "$dep_pkg" =~ ^default-dbus- ]] || \
+           [[ "$dep_pkg" =~ ^lib.*-abi- ]]; then
             continue
         fi
 
